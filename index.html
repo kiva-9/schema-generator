@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schema JSON-LD Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #12121a;
+    --bg-tertiary: #1a1a26;
+    --bg-elevated: #22222e;
+    --bg-hover: #2a2a38;
+    --border: #2a2a3a;
+    --border-focus: #5b5bf0;
+    --text-primary: #e8e8f0;
+    --text-secondary: #9898b0;
+    --text-muted: #686880;
+    --accent: #6c6cf0;
+    --accent-hover: #7d7dff;
+    --accent-muted: rgba(108,108,240,0.12);
+    --success: #34d399;
+    --success-bg: rgba(52,211,153,0.1);
+    --warning: #fbbf24;
+    --warning-bg: rgba(251,191,36,0.1);
+    --error: #f87171;
+    --error-bg: rgba(248,113,113,0.1);
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.3);
+    --font-sans: 'DM Sans', 'Noto Sans SC', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* Header */
+  .header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-icon {
+    width: 24px; height: 24px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: white; font-weight: 700;
+  }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+
+  /* Buttons */
+  .btn {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-focus); }
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-danger { color: var(--error); }
+  .btn-danger:hover { background: var(--error-bg); border-color: var(--error); }
+  .btn-ghost { border: none; background: none; }
+  .btn-ghost:hover { background: var(--bg-hover); }
+
+  /* Layout */
+  .app-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    height: calc(100vh - 56px);
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-section:last-child { border-bottom: none; flex: 1; overflow-y: auto; }
+  .sidebar-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* Form elements */
+  .input, .select, textarea {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .input:focus, .select:focus, textarea:focus { border-color: var(--border-focus); }
+  .input::placeholder, textarea::placeholder { color: var(--text-muted); }
+  .select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239898b0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+
+  .field { margin-bottom: 12px; }
+  .field-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .field-row { display: flex; gap: 8px; align-items: center; }
+
+  /* Template list */
+  .template-item {
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .template-item:hover { background: var(--bg-hover); }
+  .template-item.active { background: var(--accent-muted); border: 1px solid rgba(108,108,240,0.3); }
+  .template-item-name { font-size: 13px; font-weight: 500; }
+  .template-item-url { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .template-item-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+  .template-item:hover .template-item-actions { opacity: 1; }
+
+  /* Main content */
+  .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .main-toolbar {
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .main-toolbar .separator {
+    width: 1px; height: 24px; background: var(--border);
+  }
+
+  .main-content {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    overflow: hidden;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel + .panel { border-left: 1px solid var(--border); }
+  .panel-header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+  }
+  .panel-body { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+
+  textarea.article-input {
+    width: 100%;
+    height: 100%;
+    resize: none;
+    border: none;
+    border-radius: 0;
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.7;
+    background: transparent;
+  }
+
+  /* Output area */
+  .output-area {
+    width: 100%;
+    height: 100%;
+    padding: 20px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-primary);
+  }
+  .output-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 40px;
+    gap: 12px;
+  }
+  .output-placeholder-icon { font-size: 40px; opacity: 0.3; }
+
+  /* Steps indicator */
+  .step-indicator {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .step {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .step.active { background: var(--accent-muted); color: var(--accent); }
+  .step.done { background: var(--success-bg); color: var(--success); }
+  .step-arrow { color: var(--text-muted); font-size: 12px; }
+
+  /* Analysis result */
+  .analysis-result {
+    padding: 20px;
+  }
+  .analysis-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .analysis-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .analysis-type-badge {
+    display: inline-flex;
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: var(--accent-muted);
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .analysis-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    gap: 12px;
+  }
+  .analysis-field:last-child { border-bottom: none; }
+  .analysis-field-key { color: var(--text-muted); font-weight: 500; white-space: nowrap; min-width: 80px; }
+  .analysis-field-value { color: var(--text-primary); text-align: right; word-break: break-word; }
+
+  .analysis-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    min-width: 480px;
+    max-width: 560px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow);
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 20px;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  /* Tags input */
+  .tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-tertiary);
+    min-height: 38px;
+    cursor: text;
+  }
+  .tags-container:focus-within { border-color: var(--border-focus); }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-muted);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .tag-remove {
+    cursor: pointer;
+    opacity: 0.6;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .tag-remove:hover { opacity: 1; }
+  .tags-input {
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: var(--font-sans);
+    outline: none;
+    flex: 1;
+    min-width: 100px;
+  }
+
+  /* Checkbox */
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .checkbox-label input[type="checkbox"],
+  .checkbox-label input[type="radio"] {
+    width: 16px; height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* Loading */
+  .loading-spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast */
+  .toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .toast {
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: var(--shadow);
+    animation: slideIn 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .toast-success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(52,211,153,0.2); }
+  .toast-error { background: var(--error-bg); color: var(--error); border: 1px solid rgba(248,113,113,0.2); }
+  .toast-info { background: var(--accent-muted); color: var(--accent); border: 1px solid rgba(108,108,240,0.2); }
+  @keyframes slideIn { from { transform: translateX(40px); opacity:0; } to { transform: none; opacity:1; } }
+
+  /* Token counter */
+  .char-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .app-layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main-content { grid-template-columns: 1fr; }
+  }
+
+  /* override select dropdown bg */
+  .select option { background: var(--bg-tertiary); color: var(--text-primary); }
+
+  .status-bar {
+    padding: 6px 20px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">
+      <div class="logo-icon">{}</div>
+      Schema JSON-LD Generator
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-sm" onclick="openSettings()" title="API 设置">⚙ 设置</button>
+    <button class="btn btn-sm" onclick="importTemplates()" title="导入模板">↑ 导入</button>
+    <button class="btn btn-sm" onclick="exportTemplates()" title="导出模板">↓ 导出</button>
+  </div>
+</header>
+
+<!-- App Layout -->
+<div class="app-layout">
+  <!-- Sidebar: Template Management -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">
+        API 模型
+      </div>
+      <div style="font-size: 12px; color: var(--text-muted); word-break: break-all;" id="currentModelDisplay">
+        未配置
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="flex:1; overflow-y:auto;">
+      <div class="sidebar-label">
+        项目模板
+        <button class="btn btn-sm btn-ghost" onclick="openTemplateModal()" title="新建模板">+ 新建</button>
+      </div>
+      <div id="templateList"></div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="main">
+    <!-- Toolbar -->
+    <div class="main-toolbar">
+      <div class="step-indicator">
+        <span class="step" id="step1">① 输入文章</span>
+        <span class="step-arrow">→</span>
+        <span class="step" id="step2">② AI 分析</span>
+        <span class="step-arrow">→</span>
+        <span class="step" id="step3">③ 生成 JSON-LD</span>
+      </div>
+
+      <div style="flex:1;"></div>
+
+      <label class="checkbox-label">
+        <input type="checkbox" id="cbBreadcrumb"> BreadcrumbList
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="cbWebSite"> WebSite
+      </label>
+
+      <div class="separator"></div>
+
+      <button class="btn btn-primary" id="btnAnalyze" onclick="analyzeArticle()">
+        ▶ 分析文章
+      </button>
+    </div>
+
+    <!-- Two panels -->
+    <div class="main-content">
+      <!-- Left: Article Input -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>文章内容</span>
+          <span class="char-count" id="charCount">0 字</span>
+        </div>
+        <div class="panel-body">
+          <textarea class="article-input" id="articleInput" placeholder="将文章内容粘贴到这里...&#10;&#10;支持粘贴 HTML 或纯文本。工具会让 AI 分析文章并推荐合适的 Schema 类型。"></textarea>
+        </div>
+      </div>
+
+      <!-- Right: Output -->
+      <div class="panel">
+        <div class="panel-header">
+          <span id="outputTitle">输出</span>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-sm" id="btnCopy" onclick="copyOutput()" style="display:none;">📋 复制</button>
+            <button class="btn btn-sm" id="btnReset" onclick="resetOutput()" style="display:none;">✕ 清除</button>
+          </div>
+        </div>
+        <div class="panel-body" id="outputPanel">
+          <div class="output-placeholder" id="outputPlaceholder">
+            <div class="output-placeholder-icon">{...}</div>
+            <div>选择一个项目模板，粘贴文章内容<br>然后点击「分析文章」开始生成</div>
+          </div>
+          <div class="analysis-result" id="analysisResult" style="display:none;"></div>
+          <pre class="output-area" id="outputCode" style="display:none;"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <span id="statusText">就绪</span>
+      <span id="templateInfo">未选择模板</span>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay hidden" id="settingsModal">
+  <div class="modal">
+    <div class="modal-title">⚙ API 设置</div>
+    <div class="field">
+      <div class="field-label">OpenRouter API Key</div>
+      <div class="field-row">
+        <input type="password" class="input" id="apiKeyInput" placeholder="sk-or-v1-...">
+        <button class="btn btn-sm" onclick="toggleKeyVisibility()">👁</button>
+      </div>
+      <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+        密钥仅存储在浏览器本地 localStorage 中
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">模型选择</div>
+      <div class="field-row">
+        <select class="select" id="modelSelect" style="flex:1;">
+          <option value="">-- 请先获取模型列表 --</option>
+        </select>
+        <button class="btn btn-sm" id="btnFetchModels" onclick="fetchModels()">获取列表</button>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">自定义模型 ID（可选，优先于上方选择）</div>
+      <input type="text" class="input" id="customModelInput" placeholder="例如: google/gemma-2-9b-it:free">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('settingsModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template Modal -->
+<div class="modal-overlay hidden" id="templateModal">
+  <div class="modal">
+    <div class="modal-title" id="templateModalTitle">新建项目模板</div>
+    <div class="field">
+      <div class="field-label">模板名称 *</div>
+      <input type="text" class="input" id="tplName" placeholder="例如: 我的博客">
+    </div>
+    <div class="field">
+      <div class="field-label">组织/品牌名称 *</div>
+      <input type="text" class="input" id="tplOrgName" placeholder="法定名称或品牌名称">
+    </div>
+    <div class="field">
+      <div class="field-label">组织类型</div>
+      <select class="select" id="tplOrgType">
+        <option value="Organization">Organization</option>
+        <option value="Corporation">Corporation</option>
+        <option value="LocalBusiness">LocalBusiness</option>
+        <option value="NewsMediaOrganization">NewsMediaOrganization</option>
+        <option value="EducationalOrganization">EducationalOrganization</option>
+        <option value="GovernmentOrganization">GovernmentOrganization</option>
+        <option value="MedicalOrganization">MedicalOrganization</option>
+        <option value="NGO">NGO</option>
+        <option value="SportsOrganization">SportsOrganization</option>
+      </select>
+    </div>
+    <div class="field">
+      <div class="field-label">网站网址 *</div>
+      <input type="text" class="input" id="tplUrl" placeholder="https://example.com">
+    </div>
+    <div class="field">
+      <div class="field-label">Logo URL</div>
+      <input type="text" class="input" id="tplLogo" placeholder="https://example.com/logo.png">
+    </div>
+    <div class="field">
+      <div class="field-label">稳定 @id</div>
+      <input type="text" class="input" id="tplId" placeholder="https://example.com/#organization">
+    </div>
+    <div class="field">
+      <div class="field-label">SameAs 链接（回车添加）</div>
+      <div class="tags-container" id="sameAsTags" onclick="document.getElementById('sameAsInput').focus()">
+        <input type="text" class="tags-input" id="sameAsInput" placeholder="输入社媒链接后按回车">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">联系邮箱</div>
+      <input type="text" class="input" id="tplEmail" placeholder="contact@example.com">
+    </div>
+    <div class="field">
+      <div class="field-label">联系电话</div>
+      <input type="text" class="input" id="tplPhone" placeholder="+86-xxx-xxxx-xxxx">
+    </div>
+    <input type="hidden" id="tplEditId">
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('templateModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">保存模板</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import file input -->
+<input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="handleImportFile(event)">
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ===== State =====
+let templates = [];
+let activeTemplateId = null;
+let sameAsList = [];
+let currentStep = 'input'; // input | analysis | output
+let analysisData = null;
+
+// ===== Init =====
+document.addEventListener('DOMContentLoaded', () => {
+  loadTemplates();
+  loadSettings();
+  renderTemplateList();
+  updateStepIndicator();
+
+  document.getElementById('articleInput').addEventListener('input', function() {
+    document.getElementById('charCount').textContent = this.value.length + ' 字';
+  });
+
+  // SameAs tags
+  document.getElementById('sameAsInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && this.value.trim()) {
+      e.preventDefault();
+      sameAsList.push(this.value.trim());
+      this.value = '';
+      renderSameAsTags();
+    }
+  });
+});
+
+// ===== LocalStorage =====
+function loadTemplates() {
+  try {
+    templates = JSON.parse(localStorage.getItem('schema_templates') || '[]');
+  } catch { templates = []; }
+}
+function saveTemplatesLS() {
+  localStorage.setItem('schema_templates', JSON.stringify(templates));
+}
+function loadSettings() {
+  const key = localStorage.getItem('schema_apikey') || '';
+  const model = localStorage.getItem('schema_model') || '';
+  const custom = localStorage.getItem('schema_custom_model') || '';
+  document.getElementById('apiKeyInput').value = key;
+  document.getElementById('customModelInput').value = custom;
+  updateModelDisplay(custom || model || '未配置');
+
+  // Restore model list if available
+  try {
+    const cached = JSON.parse(localStorage.getItem('schema_model_list') || '[]');
+    if (cached.length) {
+      const sel = document.getElementById('modelSelect');
+      sel.innerHTML = '<option value="">-- 选择模型 --</option>';
+      cached.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name || m.id;
+        sel.appendChild(opt);
+      });
+      if (model) sel.value = model;
+    }
+  } catch {}
+}
+function saveSettings() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  const model = document.getElementById('modelSelect').value;
+  const custom = document.getElementById('customModelInput').value.trim();
+  localStorage.setItem('schema_apikey', key);
+  localStorage.setItem('schema_model', model);
+  localStorage.setItem('schema_custom_model', custom);
+  updateModelDisplay(custom || model || '未配置');
+  closeModal('settingsModal');
+  showToast('设置已保存', 'success');
+}
+function getApiKey() { return localStorage.getItem('schema_apikey') || ''; }
+function getModel() {
+  return localStorage.getItem('schema_custom_model') || localStorage.getItem('schema_model') || '';
+}
+function updateModelDisplay(text) {
+  document.getElementById('currentModelDisplay').textContent = text;
+}
+function toggleKeyVisibility() {
+  const inp = document.getElementById('apiKeyInput');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ===== Template Management =====
+function renderTemplateList() {
+  const container = document.getElementById('templateList');
+  if (!templates.length) {
+    container.innerHTML = '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:20px;">暂无模板<br>点击上方「新建」创建</div>';
+    return;
+  }
+  container.innerHTML = templates.map(t => `
+    <div class="template-item ${t.id === activeTemplateId ? 'active' : ''}" onclick="selectTemplate('${t.id}')">
+      <div>
+        <div class="template-item-name">${esc(t.name)}</div>
+        <div class="template-item-url">${esc(t.url || '')}</div>
+      </div>
+      <div class="template-item-actions">
+        <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); editTemplate('${t.id}')" title="编辑">✎</button>
+        <button class="btn btn-sm btn-ghost btn-danger" onclick="event.stopPropagation(); deleteTemplate('${t.id}')" title="删除">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectTemplate(id) {
+  activeTemplateId = id;
+  renderTemplateList();
+  const t = templates.find(x => x.id === id);
+  document.getElementById('templateInfo').textContent = t ? `模板: ${t.name}` : '未选择模板';
+}
+
+function openTemplateModal(editId) {
+  document.getElementById('tplEditId').value = editId || '';
+  document.getElementById('templateModalTitle').textContent = editId ? '编辑项目模板' : '新建项目模板';
+
+  if (editId) {
+    const t = templates.find(x => x.id === editId);
+    if (!t) return;
+    document.getElementById('tplName').value = t.name || '';
+    document.getElementById('tplOrgName').value = t.orgName || '';
+    document.getElementById('tplOrgType').value = t.orgType || 'Organization';
+    document.getElementById('tplUrl').value = t.url || '';
+    document.getElementById('tplLogo').value = t.logo || '';
+    document.getElementById('tplId').value = t.atId || '';
+    document.getElementById('tplEmail').value = t.email || '';
+    document.getElementById('tplPhone').value = t.phone || '';
+    sameAsList = [...(t.sameAs || [])];
+  } else {
+    ['tplName','tplOrgName','tplUrl','tplLogo','tplId','tplEmail','tplPhone'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('tplOrgType').value = 'Organization';
+    sameAsList = [];
+  }
+  renderSameAsTags();
+  openModal('templateModal');
+}
+
+function editTemplate(id) { openTemplateModal(id); }
+
+function deleteTemplate(id) {
+  if (!confirm('确定删除这个模板吗？')) return;
+  templates = templates.filter(x => x.id !== id);
+  if (activeTemplateId === id) activeTemplateId = null;
+  saveTemplatesLS();
+  renderTemplateList();
+  document.getElementById('templateInfo').textContent = '未选择模板';
+  showToast('模板已删除', 'info');
+}
+
+function saveTemplate() {
+  const name = document.getElementById('tplName').value.trim();
+  const orgName = document.getElementById('tplOrgName').value.trim();
+  const url = document.getElementById('tplUrl').value.trim().replace(/\/+$/, '');
+  if (!name || !orgName || !url) {
+    showToast('请填写必填字段', 'error');
+    return;
+  }
+  const customAtId = document.getElementById('tplId').value.trim();
+  const editId = document.getElementById('tplEditId').value;
+  const data = {
+    id: editId || 'tpl_' + Date.now(),
+    name,
+    orgName,
+    orgType: document.getElementById('tplOrgType').value,
+    url,
+    logo: document.getElementById('tplLogo').value.trim(),
+    atId: customAtId || (url + '/#organization'),
+    sameAs: [...sameAsList],
+    email: document.getElementById('tplEmail').value.trim(),
+    phone: document.getElementById('tplPhone').value.trim(),
+  };
+
+  if (editId) {
+    const idx = templates.findIndex(x => x.id === editId);
+    if (idx >= 0) templates[idx] = data;
+  } else {
+    templates.push(data);
+    activeTemplateId = data.id;
+  }
+  saveTemplatesLS();
+  renderTemplateList();
+  closeModal('templateModal');
+  showToast('模板已保存', 'success');
+  document.getElementById('templateInfo').textContent = `模板: ${data.name}`;
+}
+
+function renderSameAsTags() {
+  const container = document.getElementById('sameAsTags');
+  const input = document.getElementById('sameAsInput');
+  container.querySelectorAll('.tag').forEach(t => t.remove());
+  sameAsList.forEach((url, i) => {
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.innerHTML = `${esc(url.length > 30 ? url.slice(0, 30) + '...' : url)} <span class="tag-remove" onclick="removeSameAs(${i})">×</span>`;
+    container.insertBefore(tag, input);
+  });
+}
+function removeSameAs(i) {
+  sameAsList.splice(i, 1);
+  renderSameAsTags();
+}
+
+// Import / Export
+function exportTemplates() {
+  if (!templates.length) { showToast('没有可导出的模板', 'error'); return; }
+  const blob = new Blob([JSON.stringify(templates, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'schema-templates-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('模板已导出', 'success');
+}
+function importTemplates() {
+  document.getElementById('importFileInput').click();
+}
+function handleImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('Invalid');
+      const count = data.length;
+      data.forEach(t => {
+        if (!t.id) t.id = 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+        if (!templates.find(x => x.id === t.id)) {
+          templates.push(t);
+        }
+      });
+      saveTemplatesLS();
+      renderTemplateList();
+      showToast(`成功导入 ${count} 个模板`, 'success');
+    } catch {
+      showToast('导入失败: 文件格式不正确', 'error');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ===== Fetch Models =====
+async function fetchModels() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) { showToast('请先输入 API Key', 'error'); return; }
+
+  const btn = document.getElementById('btnFetchModels');
+  btn.disabled = true;
+  btn.textContent = '加载中...';
+
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: { 'Authorization': `Bearer ${key}` }
+    });
+    if (!resp.ok) throw new Error('API 请求失败: ' + resp.status);
+    const json = await resp.json();
+    const models = (json.data || [])
+      .filter(m => m.id)
+      .sort((a, b) => (a.id).localeCompare(b.id));
+
+    const sel = document.getElementById('modelSelect');
+    sel.innerHTML = '<option value="">-- 选择模型 --</option>';
+    const freeModels = models.filter(m => m.id.includes(':free') || (m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0'));
+    const paidModels = models.filter(m => !freeModels.includes(m));
+
+    if (freeModels.length) {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = `免费模型 (${freeModels.length})`;
+      freeModels.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name || m.id;
+        optgroup.appendChild(opt);
+      });
+      sel.appendChild(optgroup);
+    }
+    if (paidModels.length) {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = `付费模型 (${paidModels.length})`;
+      paidModels.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name || m.id;
+        optgroup.appendChild(opt);
+      });
+      sel.appendChild(optgroup);
+    }
+
+    // Cache model list
+    localStorage.setItem('schema_model_list', JSON.stringify(models.map(m => ({id: m.id, name: m.name}))));
+    showToast(`获取到 ${models.length} 个模型`, 'success');
+  } catch (err) {
+    showToast('获取模型列表失败: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '获取列表';
+  }
+}
+
+// ===== API Call =====
+async function callOpenRouter(messages, temperature = 0.3) {
+  const key = getApiKey();
+  const model = getModel();
+  if (!key) throw new Error('请先配置 API Key（点击右上角设置）');
+  if (!model) throw new Error('请先选择模型（点击右上角设置）');
+
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': window.location.href,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature,
+      max_tokens: 4096,
+    })
+  });
+
+  if (!resp.ok) {
+    const errData = await resp.json().catch(() => ({}));
+    throw new Error(errData.error?.message || `API 错误 ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+// ===== JSON Repair =====
+function extractJSON(text) {
+  // Try direct parse
+  try { return JSON.parse(text); } catch {}
+  // Try extract from code block
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    try { return JSON.parse(codeBlockMatch[1].trim()); } catch {}
+  }
+  // Try find JSON object
+  const jsonMatch = text.match(/(\{[\s\S]*\})/);
+  if (jsonMatch) {
+    try { return JSON.parse(jsonMatch[1]); } catch {}
+  }
+  // Try find JSON array
+  const arrMatch = text.match(/(\[[\s\S]*\])/);
+  if (arrMatch) {
+    try { return JSON.parse(arrMatch[1]); } catch {}
+  }
+  throw new Error('无法从 AI 响应中提取有效 JSON');
+}
+
+// ===== Step 1: Analyze =====
+async function analyzeArticle() {
+  const article = document.getElementById('articleInput').value.trim();
+  if (!article) { showToast('请先粘贴文章内容', 'error'); return; }
+  if (!activeTemplateId) { showToast('请先选择一个项目模板', 'error'); return; }
+
+  const btn = document.getElementById('btnAnalyze');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-spinner"></span> 分析中...';
+  setStatus('正在发送文章给 AI 分析...');
+  currentStep = 'analysis';
+  updateStepIndicator();
+
+  try {
+    const prompt = `You are a Schema.org structured data expert. Analyze the following article/content and return a JSON object with your analysis.
+
+IMPORTANT: Return ONLY a valid JSON object, no explanation, no markdown wrapping.
+
+The JSON must have this structure:
+{
+  "recommended_type": "The most appropriate schema.org @type (e.g., Article, NewsArticle, BlogPosting, Product, FAQ, HowTo, Recipe, Event, VideoObject, LocalBusiness, etc.)",
+  "type_reason": "Brief explanation in Chinese why this type is recommended",
+  "extracted_fields": {
+    "headline": "Article headline/title if found",
+    "description": "A concise meta description (under 160 chars)",
+    "author_name": "Author name if found",
+    "author_type": "Person or Organization",
+    "image": "Primary image URL if found, or null",
+    "language": "Content language code (e.g., zh-CN, en, ja)",
+    "keywords": ["keyword1", "keyword2"],
+    "additional_fields": {}
+  },
+  "confidence": "high/medium/low"
+}
+
+For Product type, additional_fields should include price, currency, availability, brand, etc.
+For FAQ type, additional_fields should include an array of question-answer pairs.
+For Recipe type, include ingredients, cookTime, etc.
+For HowTo type, include steps.
+Adapt additional_fields based on the detected type.
+
+Here is the article content:
+
+${article.slice(0, 12000)}`;
+
+    const response = await callOpenRouter([
+      { role: 'system', content: 'You are a Schema.org structured data expert. Always respond with valid JSON only.' },
+      { role: 'user', content: prompt }
+    ]);
+
+    analysisData = extractJSON(response);
+    showAnalysisResult(analysisData);
+    setStatus('分析完成，请确认结果');
+    showToast('文章分析完成', 'success');
+  } catch (err) {
+    showToast('分析失败: ' + err.message, 'error');
+    setStatus('分析失败');
+    currentStep = 'input';
+    updateStepIndicator();
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '▶ 分析文章';
+  }
+}
+
+function showAnalysisResult(data) {
+  const container = document.getElementById('analysisResult');
+  const fields = data.extracted_fields || {};
+
+  let fieldsHtml = '';
+  const fieldEntries = Object.entries(fields).filter(([k, v]) => v != null && k !== 'additional_fields' && (!Array.isArray(v) || v.length > 0));
+  fieldEntries.forEach(([key, val]) => {
+    const display = Array.isArray(val) ? val.join(', ') : String(val);
+    fieldsHtml += `<div class="analysis-field">
+      <span class="analysis-field-key">${esc(key)}</span>
+      <span class="analysis-field-value">${esc(display.length > 120 ? display.slice(0,120)+'...' : display)}</span>
+    </div>`;
+  });
+
+  // Additional fields
+  const additional = fields.additional_fields || {};
+  const addEntries = Object.entries(additional);
+  let addHtml = '';
+  if (addEntries.length) {
+    addEntries.forEach(([key, val]) => {
+      const display = typeof val === 'object' ? JSON.stringify(val).slice(0, 100) : String(val);
+      addHtml += `<div class="analysis-field">
+        <span class="analysis-field-key">${esc(key)}</span>
+        <span class="analysis-field-value">${esc(display)}</span>
+      </div>`;
+    });
+  }
+
+  container.innerHTML = `
+    <div class="analysis-card">
+      <div class="analysis-card-title">推荐 Schema 类型</div>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <span class="analysis-type-badge">${esc(data.recommended_type || 'Article')}</span>
+        <select class="select" id="overrideType" style="width:auto; min-width:160px;" onchange="updateTypeOverride()">
+          <option value="">使用推荐类型</option>
+          <option value="Article">Article</option>
+          <option value="NewsArticle">NewsArticle</option>
+          <option value="BlogPosting">BlogPosting</option>
+          <option value="Product">Product</option>
+          <option value="FAQPage">FAQPage</option>
+          <option value="HowTo">HowTo</option>
+          <option value="Recipe">Recipe</option>
+          <option value="Event">Event</option>
+          <option value="VideoObject">VideoObject</option>
+          <option value="LocalBusiness">LocalBusiness</option>
+          <option value="SoftwareApplication">SoftwareApplication</option>
+        </select>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted); margin-top:8px;">${esc(data.type_reason || '')}</div>
+      <div style="font-size:12px; margin-top:4px;">
+        <span style="color:${data.confidence === 'high' ? 'var(--success)' : data.confidence === 'medium' ? 'var(--warning)' : 'var(--error)'};">
+          置信度: ${esc(data.confidence || 'medium')}
+        </span>
+      </div>
+    </div>
+
+    <div class="analysis-card">
+      <div class="analysis-card-title">提取的字段</div>
+      ${fieldsHtml}
+    </div>
+
+    ${addHtml ? `<div class="analysis-card">
+      <div class="analysis-card-title">类型特定字段</div>
+      ${addHtml}
+    </div>` : ''}
+
+    <div class="analysis-card">
+      <div class="analysis-card-title">@id 与文章链接</div>
+      <div style="margin-bottom:10px;">
+        <label class="checkbox-label" style="margin-bottom:8px;">
+          <input type="radio" name="idSource" value="website" checked onchange="toggleArticleUrl()"> 文章未发布，使用官网地址生成 @id
+        </label>
+        <label class="checkbox-label">
+          <input type="radio" name="idSource" value="article" onchange="toggleArticleUrl()"> 文章已发布，使用文章链接生成 @id
+        </label>
+      </div>
+      <div id="articleUrlField" style="display:none;">
+        <input type="text" class="input" id="articleUrlInput" placeholder="输入已发布的文章 URL，例如 https://example.com/blog/my-post">
+      </div>
+      <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">
+        @id 格式：基础URL/#Organization（组织）、基础URL/#Article（文章主体，取决于类型）
+      </div>
+    </div>
+
+    <div class="analysis-card">
+      <div class="analysis-card-title">日期（可选）</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        如不需要可留空，大部分 CMS 后台会自动生成日期字段
+      </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:180px;">
+          <div class="field-label">发布时间</div>
+          <input type="datetime-local" class="input" id="datePublishedInput">
+        </div>
+        <div style="flex:1; min-width:180px;">
+          <div class="field-label">修改时间</div>
+          <input type="datetime-local" class="input" id="dateModifiedInput">
+        </div>
+      </div>
+    </div>
+
+    <div class="analysis-actions">
+      <button class="btn btn-primary" onclick="generateJsonLd()">✓ 确认并生成 JSON-LD</button>
+      <button class="btn" onclick="resetOutput()">✕ 取消</button>
+    </div>
+  `;
+
+  document.getElementById('outputPlaceholder').style.display = 'none';
+  document.getElementById('outputCode').style.display = 'none';
+  container.style.display = 'block';
+  document.getElementById('btnCopy').style.display = 'none';
+  document.getElementById('btnReset').style.display = 'inline-flex';
+  document.getElementById('outputTitle').textContent = '分析结果';
+}
+
+function updateTypeOverride() {
+  // Just for UI, actual override applied in generate step
+}
+
+function toggleArticleUrl() {
+  const isArticle = document.querySelector('input[name="idSource"][value="article"]').checked;
+  document.getElementById('articleUrlField').style.display = isArticle ? 'block' : 'none';
+}
+
+// Strip trailing slash(es) from URL to avoid double-slash in @id
+function normalizeUrl(url) {
+  return url ? url.replace(/\/+$/, '') : '';
+}
+
+// ===== Step 2: Generate JSON-LD =====
+async function generateJsonLd() {
+  if (!analysisData) return;
+
+  const template = templates.find(x => x.id === activeTemplateId);
+  if (!template) { showToast('模板不存在', 'error'); return; }
+
+  const overrideType = document.getElementById('overrideType')?.value || '';
+  const schemaType = overrideType || analysisData.recommended_type || 'Article';
+  const addBreadcrumb = document.getElementById('cbBreadcrumb').checked;
+  const addWebSite = document.getElementById('cbWebSite').checked;
+
+  // Determine @id base URL
+  const idSource = document.querySelector('input[name="idSource"]:checked')?.value || 'website';
+  let baseUrl = normalizeUrl(template.url);
+  if (idSource === 'article') {
+    const articleUrl = document.getElementById('articleUrlInput')?.value.trim();
+    if (!articleUrl) { showToast('请填写文章链接', 'error'); return; }
+    baseUrl = normalizeUrl(articleUrl);
+  }
+
+  // Use template's custom @id if set, otherwise generate from baseUrl
+  const orgId = template.atId ? template.atId : normalizeUrl(template.url) + '/#organization';
+
+  const orgSchema = {
+    "@type": template.orgType || "Organization",
+    "@id": orgId,
+    "name": template.orgName,
+    "url": normalizeUrl(template.url),
+  };
+  if (template.logo) orgSchema.logo = { "@type": "ImageObject", "url": template.logo };
+  if (template.sameAs?.length) orgSchema.sameAs = template.sameAs;
+  if (template.email || template.phone) {
+    orgSchema.contactPoint = {
+      "@type": "ContactPoint",
+    };
+    if (template.email) orgSchema.contactPoint.email = template.email;
+    if (template.phone) orgSchema.contactPoint.telephone = template.phone;
+  }
+
+  // Optional dates
+  const datePublished = document.getElementById('datePublishedInput')?.value || '';
+  const dateModified = document.getElementById('dateModifiedInput')?.value || '';
+  let dateInstruction = '';
+  if (datePublished || dateModified) {
+    dateInstruction = 'Include the following date fields in the main entity:\n';
+    if (datePublished) dateInstruction += `  "datePublished": "${new Date(datePublished).toISOString()}"\n`;
+    if (dateModified) dateInstruction += `  "dateModified": "${new Date(dateModified).toISOString()}"\n`;
+  } else {
+    dateInstruction = 'Do NOT include datePublished or dateModified fields.';
+  }
+
+  currentStep = 'output';
+  updateStepIndicator();
+  setStatus('正在生成 JSON-LD...');
+
+  const analysisResult = document.getElementById('analysisResult');
+  analysisResult.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:40px;justify-content:center;"><span class="loading-spinner"></span> 正在生成 JSON-LD...</div>';
+
+  try {
+    const prompt = `You are a Schema.org structured data expert. Generate a COMPLETE and VALID JSON-LD script based on the following inputs.
+
+CRITICAL RULES:
+1. Return ONLY the JSON-LD content (the value of the <script type="application/ld+json"> tag). Do NOT include <script> tags.
+2. Use @context: "https://schema.org"
+3. All URLs must be complete absolute URLs
+4. Follow schema.org specification strictly
+5. Return valid JSON only, no explanations
+6. For the main content entity, use this @id: "${baseUrl}/#${schemaType}"
+7. For the organization/publisher, use this @id: "${orgId}"
+
+Organization data (MUST be included as publisher/provider):
+${JSON.stringify(orgSchema, null, 2)}
+
+Target schema @type: ${schemaType}
+
+Extracted article data:
+${JSON.stringify(analysisData.extracted_fields, null, 2)}
+
+Date handling:
+${dateInstruction}
+
+${addBreadcrumb ? `Also include a BreadcrumbList schema in a @graph array.` : ''}
+${addWebSite ? `Also include a WebSite schema with SearchAction for ${normalizeUrl(template.url)} in a @graph array.` : ''}
+
+${(addBreadcrumb || addWebSite) ? 'Use @graph array structure to contain multiple schemas.' : ''}
+
+Generate the complete JSON-LD now:`;
+
+    const response = await callOpenRouter([
+      { role: 'system', content: 'You are a Schema.org JSON-LD expert. Return only valid JSON. No markdown, no explanation.' },
+      { role: 'user', content: prompt }
+    ], 0.1);
+
+    const jsonLd = extractJSON(response);
+    const formatted = JSON.stringify(jsonLd, null, 2);
+
+    analysisResult.style.display = 'none';
+    const outputCode = document.getElementById('outputCode');
+    outputCode.textContent = formatted;
+    outputCode.style.display = 'block';
+    document.getElementById('outputTitle').textContent = 'JSON-LD 输出';
+    document.getElementById('btnCopy').style.display = 'inline-flex';
+    document.getElementById('btnReset').style.display = 'inline-flex';
+    setStatus(`生成完成 — ${schemaType} — ${formatted.length} 字符`);
+    showToast('JSON-LD 生成完成', 'success');
+  } catch (err) {
+    showToast('生成失败: ' + err.message, 'error');
+    setStatus('生成失败');
+    analysisResult.innerHTML = `<div style="padding:20px;color:var(--error);">生成失败: ${esc(err.message)}<br><br><button class="btn" onclick="resetOutput()">返回</button></div>`;
+  }
+}
+
+// ===== Copy =====
+function copyOutput() {
+  const code = document.getElementById('outputCode').textContent;
+  if (!code) return;
+
+  // Wrap in script tag
+  const full = '<script type="application/ld+json">\n' + code + '\n<\/script>';
+  navigator.clipboard.writeText(full).then(() => {
+    showToast('已复制（含 script 标签）', 'success');
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = full;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('已复制', 'success');
+  });
+}
+
+// ===== Reset =====
+function resetOutput() {
+  currentStep = 'input';
+  updateStepIndicator();
+  analysisData = null;
+  document.getElementById('analysisResult').style.display = 'none';
+  document.getElementById('outputCode').style.display = 'none';
+  document.getElementById('outputPlaceholder').style.display = 'flex';
+  document.getElementById('btnCopy').style.display = 'none';
+  document.getElementById('btnReset').style.display = 'none';
+  document.getElementById('outputTitle').textContent = '输出';
+  setStatus('就绪');
+}
+
+// ===== UI Helpers =====
+function updateStepIndicator() {
+  const steps = { input: 'step1', analysis: 'step2', output: 'step3' };
+  const order = ['input', 'analysis', 'output'];
+  const currentIdx = order.indexOf(currentStep);
+  order.forEach((s, i) => {
+    const el = document.getElementById(steps[s]);
+    el.className = 'step' + (i < currentIdx ? ' done' : i === currentIdx ? ' active' : '');
+  });
+}
+
+function setStatus(text) {
+  document.getElementById('statusText').textContent = text;
+}
+
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function openSettings() {
+  loadSettings();
+  openModal('settingsModal');
+}
+
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// Close modals on overlay click
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-overlay')) {
+    e.target.classList.add('hidden');
+  }
+});
+</script>
+
+</body>
+</html>
