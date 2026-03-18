@@ -20,13 +20,14 @@
 
 点击右上角 **⚙ 设置** 按钮，进入设置面板：
 
-1. 输入你的 OpenRouter API Key
-2. 点击 **获取列表** 拉取可用模型（免费模型和付费模型会分组显示）
-3. 选择一个模型，或在「自定义模型 ID」中手动输入模型 ID
+1. 输入 API Key
+2. 点击 **获取列表** 拉取可用模型。目前测试阶段，暂时先用免费模型，建议用**StepFun: Step 3.5 Flash (free), Arcee Al: Trinity Large Preview (free)**，可自行测试
+3. 「自定义模型 ID」暂时不用，后续用付费模型的时候填
 4. 点击 **保存设置**
 
 <!-- 截图：设置面板，展示 API Key 输入框、模型选择下拉和获取列表按钮 -->
-![设置面板](screenshots/settings.png)
+<img width="1410" height="852" alt="image" src="https://github.com/user-attachments/assets/ca9cdb4b-48ad-4f06-86e1-2784d2d1828a" />
+
 
 > **提示**：API Key 和模型选择保存在浏览器 localStorage 中，刷新页面后仍然有效。更换浏览器或清除浏览器数据后需要重新配置。
 
@@ -48,24 +49,21 @@
 | 联系邮箱 / 电话 | 写入 contactPoint 字段 | |
 
 <!-- 截图：模板编辑弹窗，展示各字段填写示例 -->
-![模板编辑](screenshots/template-edit.png)
+<img width="2478" height="1678" alt="image" src="https://github.com/user-attachments/assets/c509abcc-8096-4916-8498-d180b8a3b970" />
+
 
 保存后，在左侧列表中点击模板名称即可激活该模板。
-
-> **提示**：网站网址末尾的斜杠会自动去除，避免生成 @id 时出现双斜杠的问题。
 
 ---
 
 ### 第三步：粘贴文章并分析
 
 1. 在左侧面板中粘贴文章内容（支持纯文本或 HTML）
-2. 根据需要勾选顶部工具栏的选项：
+2. 根据需要勾选顶部工具栏的选项（目前这两个先不用管，还没做）：
    - **BreadcrumbList** — 在输出中包含面包屑导航 Schema
    - **WebSite** — 在输出中包含 WebSite + SearchAction Schema
 3. 点击 **▶ 分析文章**
 
-<!-- 截图：主界面，左侧已粘贴文章，顶部工具栏可见 -->
-![文章输入](screenshots/article-input.png)
 
 AI 会返回分析结果，包括：
 
@@ -75,7 +73,8 @@ AI 会返回分析结果，包括：
 - **类型特定字段**：如 Product 类型会额外提取价格、品牌等
 
 <!-- 截图：分析结果面板，展示推荐类型和提取字段 -->
-![分析结果](screenshots/analysis-result.png)
+<img width="4238" height="2230" alt="image" src="https://github.com/user-attachments/assets/d7cafabc-1f16-48aa-b779-8014e5373987" />
+
 
 如果你认为推荐的类型不准确，可以通过右侧下拉菜单手动选择其他类型。
 
