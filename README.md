@@ -20,9 +20,9 @@
 
 点击右上角 **⚙ 设置** 按钮，进入设置面板：
 
-1. 输入 API Key
-2. 点击 **获取列表** 拉取可用模型。目前测试阶段，暂时先用免费模型，建议用**StepFun: Step 3.5 Flash (free), Arcee Al: Trinity Large Preview (free)**，可自行测试
-3. 「自定义模型 ID」暂时不用，后续用付费模型的时候填
+1. 输入 Base URL和API Key，请勿泄露谢谢
+2. 点击 **获取列表** 拉取可用模型。目前测试阶段，推荐使用GPT-4o，其他模型可自行测试
+3. 「自定义模型 ID」暂时不用
 4. 点击 **保存设置**
 
 <!-- 截图：设置面板，展示 API Key 输入框、模型选择下拉和获取列表按钮 -->
@@ -73,8 +73,7 @@ AI 会返回分析结果，包括：
 - **类型特定字段**：如 Product 类型会额外提取价格、品牌等
 
 <!-- 截图：分析结果面板，展示推荐类型和提取字段 -->
-<img width="4238" height="2230" alt="image" src="https://github.com/user-attachments/assets/d7cafabc-1f16-48aa-b779-8014e5373987" />
-
+<img width="4216" height="2256" alt="image" src="https://github.com/user-attachments/assets/e9c3a914-2f28-429c-8537-f63692c5ea25" />
 
 如果你认为推荐的类型不准确，可以通过右侧下拉菜单手动选择其他类型。
 
@@ -96,7 +95,8 @@ AI 会返回分析结果，包括：
 确认分析结果无误后，点击 **✓ 确认并生成 JSON-LD**。工具会将模板中的组织固定信息与 AI 提取的字段合并，生成完整的 JSON-LD 结构化数据。
 
 <!-- 截图：生成完成后的 JSON-LD 输出面板 -->
-![JSON-LD 输出](screenshots/jsonld-output.png)
+<img width="4234" height="2190" alt="image" src="https://github.com/user-attachments/assets/7dd26b70-aa22-4d2e-b45b-e8e7296d7c72" />
+
 
 点击右上角 **📋 复制** 按钮，输出内容会自动包裹为：
 
@@ -109,7 +109,17 @@ AI 会返回分析结果，包括：
 </script>
 ```
 
-直接粘贴到页面 HTML 的 `<head>` 标签内即可。
+## 验证生成结果
+
+生成 JSON-LD 后，建议使用以下工具验证：
+
+- **Google Rich Results Test**：https://search.google.com/test/rich-results
+- **Schema.org Validator**：https://validator.schema.org/
+
+如果出现错误的字段，直接删除对应区域的代码就可以
+<img width="4206" height="2086" alt="image" src="https://github.com/user-attachments/assets/a76e434c-0971-4ca1-9b0d-6497f264ce9c" />
+
+没问题后即可粘贴到页面文章编辑器代码模式下
 
 ---
 
@@ -118,30 +128,6 @@ AI 会返回分析结果，包括：
 - **导出**：点击右上角 **↓ 导出**，会将所有模板导出为一个 `.json` 文件，方便备份或分享给团队成员。
 - **导入**：点击右上角 **↑ 导入**，选择之前导出的 `.json` 文件。已存在的同 ID 模板不会重复导入。
 - **编辑 / 删除**：鼠标悬停在左侧模板列表的条目上，会出现编辑（✎）和删除（✕）按钮。
-
----
-
-## 模型推荐
-
-以下是经过测试效果较好的模型（仅供参考）：
-
-| 模型 | 类型 | 适用场景 |
-|------|------|----------|
-| `google/gemma-2-9b-it:free` | 免费 | 日常使用，JSON 输出较稳定 |
-| `meta-llama/llama-3.1-8b-instruct:free` | 免费 | 备选方案 |
-| `anthropic/claude-sonnet-4` | 付费 | 复杂页面、高精度需求 |
-| `openai/gpt-4o-mini` | 付费 | 性价比高，输出质量好 |
-
-> **注意**：免费模型的 JSON 输出稳定性可能不如付费模型，工具内置了 JSON 解析容错逻辑来兜底，但如果频繁出现解析错误，建议更换模型试试。
-
----
-
-## 验证生成结果
-
-生成 JSON-LD 后，建议使用以下工具验证：
-
-- **Google Rich Results Test**：https://search.google.com/test/rich-results
-- **Schema.org Validator**：https://validator.schema.org/
 
 ---
 
