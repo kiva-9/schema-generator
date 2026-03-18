@@ -612,9 +612,19 @@
   <div class="modal">
     <div class="modal-title">⚙ API 设置</div>
     <div class="field">
-      <div class="field-label">OpenRouter API Key</div>
+      <div class="field-label">API Base URL</div>
+      <input type="text" class="input" id="apiBaseInput" placeholder="https://openrouter.ai/api/v1">
+      <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+        兼容 OpenAI 格式的 API 地址，例如：<br>
+        OpenRouter: https://openrouter.ai/api/v1<br>
+        OpenAI: https://api.openai.com/v1<br>
+        本地 Ollama: http://localhost:11434/v1
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">API Key</div>
       <div class="field-row">
-        <input type="password" class="input" id="apiKeyInput" placeholder="sk-or-v1-...">
+        <input type="password" class="input" id="apiKeyInput" placeholder="sk-...">
         <button class="btn btn-sm" onclick="toggleKeyVisibility()">👁</button>
       </div>
       <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
@@ -747,9 +757,11 @@ function saveTemplatesLS() {
   localStorage.setItem('schema_templates', JSON.stringify(templates));
 }
 function loadSettings() {
+  const base = localStorage.getItem('schema_apibase') || 'https://openrouter.ai/api/v1';
   const key = localStorage.getItem('schema_apikey') || '';
   const model = localStorage.getItem('schema_model') || '';
   const custom = localStorage.getItem('schema_custom_model') || '';
+  document.getElementById('apiBaseInput').value = base;
   document.getElementById('apiKeyInput').value = key;
   document.getElementById('customModelInput').value = custom;
   updateModelDisplay(custom || model || '未配置');
@@ -771,9 +783,11 @@ function loadSettings() {
   } catch {}
 }
 function saveSettings() {
+  const base = document.getElementById('apiBaseInput').value.trim().replace(/\/+$/, '') || 'https://openrouter.ai/api/v1';
   const key = document.getElementById('apiKeyInput').value.trim();
   const model = document.getElementById('modelSelect').value;
   const custom = document.getElementById('customModelInput').value.trim();
+  localStorage.setItem('schema_apibase', base);
   localStorage.setItem('schema_apikey', key);
   localStorage.setItem('schema_model', model);
   localStorage.setItem('schema_custom_model', custom);
@@ -781,6 +795,7 @@ function saveSettings() {
   closeModal('settingsModal');
   showToast('设置已保存', 'success');
 }
+function getBaseUrl() { return (localStorage.getItem('schema_apibase') || 'https://openrouter.ai/api/v1').replace(/\/+$/, ''); }
 function getApiKey() { return localStorage.getItem('schema_apikey') || ''; }
 function getModel() {
   return localStorage.getItem('schema_custom_model') || localStorage.getItem('schema_model') || '';
@@ -953,37 +968,48 @@ function handleImportFile(e) {
 
 // ===== Fetch Models =====
 async function fetchModels() {
+  const base = document.getElementById('apiBaseInput').value.trim().replace(/\/+$/, '');
   const key = document.getElementById('apiKeyInput').value.trim();
-  if (!key) { showToast('请先输入 API Key', 'error'); return; }
+  if (!base) { showToast('请先输入 API Base URL', 'error'); return; }
 
   const btn = document.getElementById('btnFetchModels');
   btn.disabled = true;
   btn.textContent = '加载中...';
 
   try {
-    const resp = await fetch('https://openrouter.ai/api/v1/models', {
-      headers: { 'Authorization': `Bearer ${key}` }
-    });
+    const headers = { 'Content-Type': 'application/json' };
+    if (key) headers['Authorization'] = `Bearer ${key}`;
+
+    const resp = await fetch(base + '/models', { headers });
     if (!resp.ok) throw new Error('API 请求失败: ' + resp.status);
     const json = await resp.json();
-    const models = (json.data || [])
+    const allModels = (json.data || [])
       .filter(m => m.id)
       .sort((a, b) => (a.id).localeCompare(b.id));
 
     const sel = document.getElementById('modelSelect');
     sel.innerHTML = '<option value="">-- 选择模型 --</option>';
-    const freeModels = models.filter(m => m.id.includes(':free') || (m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0'));
 
-    freeModels.forEach(m => {
+    // If OpenRouter, only show free models; otherwise show all
+    const isOpenRouter = base.includes('openrouter.ai');
+    let displayModels;
+    if (isOpenRouter) {
+      displayModels = allModels.filter(m => m.id.includes(':free') || (m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0'));
+    } else {
+      displayModels = allModels;
+    }
+
+    displayModels.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m.id;
       opt.textContent = m.name || m.id;
       sel.appendChild(opt);
     });
 
-    // Cache free model list
-    localStorage.setItem('schema_model_list', JSON.stringify(freeModels.map(m => ({id: m.id, name: m.name}))));
-    showToast(`获取到 ${freeModels.length} 个免费模型`, 'success');
+    // Cache model list
+    localStorage.setItem('schema_model_list', JSON.stringify(displayModels.map(m => ({id: m.id, name: m.name}))));
+    const label = isOpenRouter ? `获取到 ${displayModels.length} 个免费模型` : `获取到 ${displayModels.length} 个模型`;
+    showToast(label, 'success');
   } catch (err) {
     showToast('获取模型列表失败: ' + err.message, 'error');
   } finally {
@@ -993,19 +1019,19 @@ async function fetchModels() {
 }
 
 // ===== API Call =====
-async function callOpenRouter(messages, temperature = 0.3) {
+async function callApi(messages, temperature = 0.3) {
+  const base = getBaseUrl();
   const key = getApiKey();
   const model = getModel();
-  if (!key) throw new Error('请先配置 API Key（点击右上角设置）');
+  if (!base) throw new Error('请先配置 API Base URL（点击右上角设置）');
   if (!model) throw new Error('请先选择模型（点击右上角设置）');
 
-  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const headers = { 'Content-Type': 'application/json' };
+  if (key) headers['Authorization'] = `Bearer ${key}`;
+
+  const resp = await fetch(base + '/chat/completions', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': window.location.href,
-    },
+    headers,
     body: JSON.stringify({
       model,
       messages,
@@ -1090,7 +1116,7 @@ Here is the article content:
 
 ${article.slice(0, 12000)}`;
 
-    const response = await callOpenRouter([
+    const response = await callApi([
       { role: 'system', content: 'You are a Schema.org structured data expert. Always respond with valid JSON only.' },
       { role: 'user', content: prompt }
     ]);
@@ -1328,7 +1354,7 @@ ${(addBreadcrumb || addWebSite) ? 'Use @graph array structure to contain multipl
 
 Generate the complete JSON-LD now:`;
 
-    const response = await callOpenRouter([
+    const response = await callApi([
       { role: 'system', content: 'You are a Schema.org JSON-LD expert. Return only valid JSON. No markdown, no explanation.' },
       { role: 'user', content: prompt }
     ], 0.1);
