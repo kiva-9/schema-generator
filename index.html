@@ -973,34 +973,17 @@ async function fetchModels() {
     const sel = document.getElementById('modelSelect');
     sel.innerHTML = '<option value="">-- 选择模型 --</option>';
     const freeModels = models.filter(m => m.id.includes(':free') || (m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0'));
-    const paidModels = models.filter(m => !freeModels.includes(m));
 
-    if (freeModels.length) {
-      const optgroup = document.createElement('optgroup');
-      optgroup.label = `免费模型 (${freeModels.length})`;
-      freeModels.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.id;
-        opt.textContent = m.name || m.id;
-        optgroup.appendChild(opt);
-      });
-      sel.appendChild(optgroup);
-    }
-    if (paidModels.length) {
-      const optgroup = document.createElement('optgroup');
-      optgroup.label = `付费模型 (${paidModels.length})`;
-      paidModels.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.id;
-        opt.textContent = m.name || m.id;
-        optgroup.appendChild(opt);
-      });
-      sel.appendChild(optgroup);
-    }
+    freeModels.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.name || m.id;
+      sel.appendChild(opt);
+    });
 
-    // Cache model list
-    localStorage.setItem('schema_model_list', JSON.stringify(models.map(m => ({id: m.id, name: m.name}))));
-    showToast(`获取到 ${models.length} 个模型`, 'success');
+    // Cache free model list
+    localStorage.setItem('schema_model_list', JSON.stringify(freeModels.map(m => ({id: m.id, name: m.name}))));
+    showToast(`获取到 ${freeModels.length} 个免费模型`, 'success');
   } catch (err) {
     showToast('获取模型列表失败: ' + err.message, 'error');
   } finally {
