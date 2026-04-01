@@ -467,6 +467,7 @@
   }
   .toast-success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(52,211,153,0.2); }
   .toast-error { background: var(--error-bg); color: var(--error); border: 1px solid rgba(248,113,113,0.2); }
+  .toast-warning { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(251,191,36,0.2); }
   .toast-info { background: var(--accent-muted); color: var(--accent); border: 1px solid rgba(108,108,240,0.2); }
   @keyframes slideIn { from { transform: translateX(40px); opacity:0; } to { transform: none; opacity:1; } }
 
@@ -1068,7 +1069,199 @@ function extractJSON(text) {
   if (arrMatch) {
     try { return JSON.parse(arrMatch[1]); } catch {}
   }
-  throw new Error('无法从 AI 响应中提取有效 JSON');
+  return null; // Return null instead of throwing, let validation handle it
+}
+
+// ===== Validation + Retry Engine =====
+const MAX_RETRIES = 2;
+
+async function callWithValidation(messages, validateFn, temperature = 0.3, onRetry) {
+  let lastErrors = [];
+  let bestResult = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    let currentMessages = [...messages];
+
+    // If retrying, append the error feedback
+    if (attempt > 0 && lastErrors.length) {
+      if (onRetry) onRetry(attempt);
+      currentMessages.push({
+        role: 'assistant',
+        content: bestResult ? JSON.stringify(bestResult) : 'Invalid output'
+      });
+      currentMessages.push({
+        role: 'user',
+        content: `Your previous output has the following problems. Please fix them and return ONLY valid JSON:\n${lastErrors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`
+      });
+    }
+
+    const raw = await callApi(currentMessages, temperature);
+    const parsed = extractJSON(raw);
+
+    if (!parsed) {
+      lastErrors = ['Response is not valid JSON. Return ONLY a JSON object, no markdown, no explanation.'];
+      continue;
+    }
+
+    const errors = validateFn(parsed);
+    if (errors.length === 0) {
+      return { data: parsed, attempts: attempt + 1, warnings: [] };
+    }
+
+    // Keep the best result so far (fewer errors = better)
+    if (!bestResult || errors.length < lastErrors.length) {
+      bestResult = parsed;
+    }
+    lastErrors = errors;
+  }
+
+  // Exhausted retries, return best result with warnings
+  if (bestResult) {
+    return { data: bestResult, attempts: MAX_RETRIES + 1, warnings: lastErrors };
+  }
+  throw new Error('AI 多次返回无效结果，请尝试更换模型');
+}
+
+// ===== Step 1 Validator =====
+function validateAnalysis(data) {
+  const errors = [];
+  if (typeof data !== 'object' || data === null) {
+    return ['Response must be a JSON object'];
+  }
+  if (!data.recommended_type || typeof data.recommended_type !== 'string') {
+    errors.push('Missing or invalid "recommended_type" (must be a string like "Article", "Product", "FAQPage" etc.)');
+  }
+  if (!data.extracted_fields || typeof data.extracted_fields !== 'object') {
+    errors.push('Missing "extracted_fields" object');
+    return errors;
+  }
+  const f = data.extracted_fields;
+
+  // headline: must be non-empty, not placeholder
+  if (!f.headline || typeof f.headline !== 'string' || f.headline.trim().length < 2) {
+    errors.push('extracted_fields.headline must be a meaningful non-empty string extracted from the article');
+  }
+  // description: must be non-empty, reasonable length
+  if (!f.description || typeof f.description !== 'string' || f.description.trim().length < 10) {
+    errors.push('extracted_fields.description must be a meaningful string (at least 10 characters) summarizing the article');
+  }
+  // keywords: must be array with at least 1 item
+  if (!f.keywords || !Array.isArray(f.keywords) || f.keywords.length === 0) {
+    errors.push('extracted_fields.keywords must be a non-empty array with at least 1 keyword');
+  } else if (f.keywords.some(k => typeof k !== 'string' || k.trim() === '')) {
+    errors.push('All items in extracted_fields.keywords must be non-empty strings');
+  }
+  // author_type if present
+  if (f.author_type && !['Person', 'Organization'].includes(f.author_type)) {
+    errors.push('extracted_fields.author_type must be "Person" or "Organization"');
+  }
+  // language should look like a language code
+  if (f.language && typeof f.language === 'string' && !/^[a-z]{2}(-[A-Za-z]{2,})?$/.test(f.language.trim())) {
+    errors.push('extracted_fields.language must be a valid language code like "en", "zh-CN", "ja"');
+  }
+  // confidence
+  if (!data.confidence || !['high', 'medium', 'low'].includes(data.confidence)) {
+    errors.push('Missing or invalid "confidence" (must be "high", "medium", or "low")');
+  }
+  // type_reason should exist and be in Chinese
+  if (!data.type_reason || typeof data.type_reason !== 'string' || data.type_reason.trim().length < 5) {
+    errors.push('Missing "type_reason" — provide a brief explanation in Chinese for why this schema type is recommended');
+  }
+  return errors;
+}
+
+// ===== Step 2 Validator =====
+function validateJsonLd(data, config) {
+  const errors = [];
+  if (typeof data !== 'object' || data === null) {
+    return ['Response must be a JSON object'];
+  }
+
+  const jsonStr = JSON.stringify(data);
+  const hasGraph = Array.isArray(data['@graph']);
+  const allEntities = hasGraph ? data['@graph'] : [data];
+
+  // 1. @context must be exactly "https://schema.org"
+  const context = data['@context'];
+  if (context !== 'https://schema.org') {
+    errors.push('"@context" must be exactly "https://schema.org"');
+  }
+
+  // 2. Main entity @type must match
+  const mainEntity = allEntities.find(e => e['@type'] === config.expectedType) || (!hasGraph ? data : null);
+  if (!mainEntity || mainEntity['@type'] !== config.expectedType) {
+    errors.push(`Must contain a main entity with @type "${config.expectedType}"`);
+  }
+
+  // 3. Main entity must have headline/name and description with actual values
+  if (mainEntity) {
+    if (!mainEntity.headline && !mainEntity.name) {
+      errors.push('Main entity must have "headline" or "name" with a non-empty value');
+    }
+    if (!mainEntity.description || mainEntity.description.trim().length < 5) {
+      errors.push('Main entity must have "description" with a meaningful value');
+    }
+
+    // 4. Main entity @id must match expected format
+    const expectedEntityId = config.baseUrl + '/#' + config.expectedType;
+    if (mainEntity['@id'] !== expectedEntityId) {
+      errors.push(`Main entity @id must be exactly "${expectedEntityId}"`);
+    }
+  }
+
+  // 5. Organization @id must be present
+  if (!jsonStr.includes(config.orgId)) {
+    errors.push(`Organization @id "${config.orgId}" must appear in the output`);
+  }
+
+  // 6. Organization name must match template
+  if (!jsonStr.includes(config.orgName)) {
+    errors.push(`Organization name "${config.orgName}" must appear in the output`);
+  }
+
+  // 7. Organization URL must match template
+  if (!jsonStr.includes(config.orgUrl)) {
+    errors.push(`Organization URL "${config.orgUrl}" must appear in the output`);
+  }
+
+  // 8. Logo — if template has logo, it must appear
+  if (config.logo && !jsonStr.includes(config.logo)) {
+    errors.push(`Logo URL "${config.logo}" was provided in template but is missing from output`);
+  }
+
+  // 9. SameAs — if template has sameAs links, they should appear
+  if (config.sameAs && config.sameAs.length > 0) {
+    const missingSameAs = config.sameAs.filter(url => !jsonStr.includes(url));
+    if (missingSameAs.length > 0) {
+      errors.push(`These sameAs URLs from the template are missing: ${missingSameAs.join(', ')}`);
+    }
+  }
+
+  // 10. Dates — if user specified dates, they must appear (match up to seconds, ignore ms differences)
+  if (config.datePublished) {
+    const datePrefix = config.datePublished.slice(0, 19); // YYYY-MM-DDTHH:MM:SS
+    if (!jsonStr.includes(datePrefix)) {
+      errors.push(`datePublished containing "${datePrefix}" was specified but is missing from output`);
+    }
+  }
+  if (config.dateModified) {
+    const datePrefix = config.dateModified.slice(0, 19);
+    if (!jsonStr.includes(datePrefix)) {
+      errors.push(`dateModified containing "${datePrefix}" was specified but is missing from output`);
+    }
+  }
+
+  // 11. If BreadcrumbList was requested, check it exists
+  if (config.addBreadcrumb && !allEntities.some(e => e['@type'] === 'BreadcrumbList')) {
+    errors.push('BreadcrumbList was requested but not found in output');
+  }
+
+  // 12. If WebSite was requested, check it exists
+  if (config.addWebSite && !allEntities.some(e => e['@type'] === 'WebSite')) {
+    errors.push('WebSite schema was requested but not found in output');
+  }
+
+  return errors;
 }
 
 // ===== Step 1: Analyze =====
@@ -1116,15 +1309,28 @@ Here is the article content:
 
 ${article.slice(0, 12000)}`;
 
-    const response = await callApi([
+    const messages = [
       { role: 'system', content: 'You are a Schema.org structured data expert. Always respond with valid JSON only.' },
       { role: 'user', content: prompt }
-    ]);
+    ];
 
-    analysisData = extractJSON(response);
+    const result = await callWithValidation(
+      messages,
+      validateAnalysis,
+      0.3,
+      (attempt) => setStatus(`分析结果校验不通过，正在第 ${attempt} 次重试...`)
+    );
+
+    analysisData = result.data;
     showAnalysisResult(analysisData);
-    setStatus('分析完成，请确认结果');
-    showToast('文章分析完成', 'success');
+
+    if (result.warnings.length) {
+      setStatus(`分析完成（${result.attempts} 次调用，部分字段可能不完整）`);
+      showToast(`分析完成，但存在 ${result.warnings.length} 个警告`, 'warning');
+    } else {
+      setStatus(`分析完成（${result.attempts === 1 ? '一次通过' : result.attempts + ' 次调用'}）`);
+      showToast('文章分析完成', 'success');
+    }
   } catch (err) {
     showToast('分析失败: ' + err.message, 'error');
     setStatus('分析失败');
@@ -1354,12 +1560,36 @@ ${(addBreadcrumb || addWebSite) ? 'Use @graph array structure to contain multipl
 
 Generate the complete JSON-LD now:`;
 
-    const response = await callApi([
+    const messages = [
       { role: 'system', content: 'You are a Schema.org JSON-LD expert. Return only valid JSON. No markdown, no explanation.' },
       { role: 'user', content: prompt }
-    ], 0.1);
+    ];
 
-    const jsonLd = extractJSON(response);
+    const validationConfig = {
+      expectedType: schemaType,
+      baseUrl,
+      orgId,
+      orgName: template.orgName,
+      orgUrl: normalizeUrl(template.url),
+      logo: template.logo || null,
+      sameAs: template.sameAs || [],
+      datePublished: datePublished ? new Date(datePublished).toISOString() : null,
+      dateModified: dateModified ? new Date(dateModified).toISOString() : null,
+      addBreadcrumb,
+      addWebSite,
+    };
+
+    const result = await callWithValidation(
+      messages,
+      (data) => validateJsonLd(data, validationConfig),
+      0.1,
+      (attempt) => {
+        setStatus(`JSON-LD 校验不通过，正在第 ${attempt} 次重试...`);
+        analysisResult.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:40px;justify-content:center;"><span class="loading-spinner"></span> 校验不通过，第 ${attempt} 次重试中...</div>`;
+      }
+    );
+
+    const jsonLd = result.data;
     const formatted = JSON.stringify(jsonLd, null, 2);
 
     analysisResult.style.display = 'none';
@@ -1369,8 +1599,14 @@ Generate the complete JSON-LD now:`;
     document.getElementById('outputTitle').textContent = 'JSON-LD 输出';
     document.getElementById('btnCopy').style.display = 'inline-flex';
     document.getElementById('btnReset').style.display = 'inline-flex';
-    setStatus(`生成完成 — ${schemaType} — ${formatted.length} 字符`);
-    showToast('JSON-LD 生成完成', 'success');
+
+    if (result.warnings.length) {
+      setStatus(`生成完成（${result.attempts} 次调用，存在 ${result.warnings.length} 个警告） — ${schemaType}`);
+      showToast(`JSON-LD 已生成，但有 ${result.warnings.length} 个校验警告，请检查输出`, 'warning');
+    } else {
+      setStatus(`生成完成（${result.attempts === 1 ? '一次通过' : result.attempts + ' 次调用'}） — ${schemaType} — ${formatted.length} 字符`);
+      showToast('JSON-LD 生成完成', 'success');
+    }
   } catch (err) {
     showToast('生成失败: ' + err.message, 'error');
     setStatus('生成失败');
